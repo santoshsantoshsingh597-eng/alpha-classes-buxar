@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "A student registered in the coaching institute.",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string", "description": "Full name of the student" },
+        "fatherName": { "type": "string", "description": "Father's name" },
+        "motherName": { "type": "string", "description": "Mother's name" },
+        "address": { "type": "string", "description": "Residential address" },
+        "mobileNumber": { "type": "string", "description": "Primary mobile number" },
+        "alternateNumber": { "type": "string", "description": "Secondary mobile number" },
+        "class": { "type": "string", "enum": ["9", "10", "11", "12"], "description": "Academic class" },
+        "stream": { "type": "string", "enum": ["Science", "Arts"], "description": "Academic stream" },
+        "photoUrl": { "type": "string", "description": "URL of the student's photo" },
+        "paymentStatus": { "type": "string", "enum": ["PENDING", "FULL PAID"], "description": "Payment status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Registration timestamp" }
+      },
+      "required": ["fullName", "mobileNumber", "class", "stream"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Administrator of the system.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin"] }
+      }
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Collection of student admission records"
+    },
+    "/admins/{adminId}": {
+      "schema": "Admin",
+      "description": "Collection of admin users"
+    }
+  }
+}

@@ -1,0 +1,81 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: students
+// Document ID: auto-generated
+// Fields:
+//   - fullName: string (required)
+//   - fatherName: string
+//   - motherName: string
+//   - address: string
+//   - mobileNumber: string (required, unique check in app)
+//   - alternateNumber: string
+//   - class: string (9, 10, 11, 12)
+//   - stream: string (Science, Arts)
+//   - photoUrl: string
+//   - paymentStatus: string (PENDING, FULL PAID)
+//   - createdAt: timestamp
+//
+// Collection: admins
+// Document ID: auth.uid
+// Fields:
+//   - username: string
+//   - role: string (admin)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        ((exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin') ||
+         (request.auth.token.email == "santoshsantoshsingh597@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidStudent(data) {
+      return data.fullName is string && data.fullName.size() > 0 &&
+             data.mobileNumber is string &&
+             data.class in ['9', '10', '11', '12'] &&
+             data.stream in ['Science', 'Arts'] &&
+             data.paymentStatus in ['PENDING', 'FULL PAID'] &&
+             (!('fatherName' in data) || data.fatherName is string) &&
+             (!('motherName' in data) || data.motherName is string) &&
+             (!('address' in data) || data.address is string) &&
+             (!('alternateNumber' in data) || data.alternateNumber is string) &&
+             (!('photoUrl' in data) || data.photoUrl is string) &&
+             (!('createdAt' in data) || data.createdAt is timestamp || data.createdAt == null);
+    }
+
+    // Students Collection
+    match /students/{studentId} {
+      // Public can create an admission and check for duplicates
+      allow create, list: if true;
+      
+      // Admins can manage everything
+      allow read, write: if isAdmin();
+      
+      // Public can read a specific student for QR scanning
+      allow get: if true; 
+    }
+
+    // Admins Collection
+    match /admins/{adminId} {
+      allow read: if isAuthenticated() && request.auth.uid == adminId;
+      allow write: if isAdmin();
+    }
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
