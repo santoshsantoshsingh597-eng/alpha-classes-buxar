@@ -17,26 +17,22 @@ import {
   deleteDoc,
   getDoc
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
   User, 
   Phone, 
   MapPin, 
   GraduationCap, 
-  Camera, 
   CheckCircle, 
   Search, 
   Download, 
   Share2, 
   Trash2, 
   Edit, 
-  QrCode, 
   LogOut, 
   LayoutDashboard,
   ArrowLeft,
   Copy,
   CreditCard,
-  Scan,
   Smartphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -45,7 +41,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { db, storage, auth } from './firebase';
+import { db, auth } from './firebase';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
 
 // --- Utility Functions ---
@@ -117,7 +113,6 @@ interface Student {
   alternateNumber: string;
   class: string;
   stream: string;
-  photoUrl: string;
   paymentStatus: 'PENDING' | 'FULL PAID';
   createdAt: any;
 }
@@ -265,16 +260,6 @@ export default function App() {
     class: '',
     stream: '',
   });
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setPhoto(file);
-      setPhotoPreview(URL.createObjectURL(file));
-    }
-  };
 
   const submitAdmission = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -305,24 +290,8 @@ export default function App() {
         return;
       }
 
-      let photoUrl = '';
-      if (photo) {
-        try {
-          console.log("Starting photo upload...", photo.name);
-          const storageRef = ref(storage, `student_photos/${Date.now()}_${photo.name}`);
-          const uploadResult = await uploadBytes(storageRef, photo);
-          console.log("Photo upload successful:", uploadResult.metadata.fullPath);
-          photoUrl = await getDownloadURL(storageRef);
-          console.log("Photo URL obtained:", photoUrl);
-        } catch (storageError) {
-          console.error("Storage upload failed:", storageError);
-          // We continue without photo if upload fails
-        }
-      }
-
       const studentData = {
         ...formData,
-        photoUrl,
         paymentStatus: 'PENDING' as const,
         createdAt: serverTimestamp(),
       };
@@ -344,8 +313,6 @@ export default function App() {
           class: '',
           stream: '',
         });
-        setPhoto(null);
-        setPhotoPreview(null);
       } catch (error) {
         console.error("addDoc failed:", error);
         handleFirestoreError(error, OperationType.CREATE, 'students');
@@ -393,31 +360,6 @@ export default function App() {
     window.open(url, '_blank');
   };
 
-  const downloadPhoto = async (studentToDownload?: Student) => {
-    const targetStudent = studentToDownload || selectedStudent;
-    if (!targetStudent?.photoUrl) {
-      alert("No photo available for this student.");
-      return;
-    }
-    
-    try {
-      const response = await fetch(targetStudent.photoUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${targetStudent.fullName}_photo.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Photo download failed", error);
-      // Fallback for CORS issues
-      window.open(targetStudent.photoUrl, '_blank');
-    }
-  };
-
   const togglePayment = async (student: Student) => {
     const newStatus = student.paymentStatus === 'FULL PAID' ? 'PENDING' : 'FULL PAID';
     try {
@@ -435,23 +377,6 @@ export default function App() {
         setView('admin');
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, `students/${id}`);
-      }
-    }
-  };
-
-  // --- QR Scanner Logic ---
-  const handleScan = async (data: any) => {
-    if (data) {
-      try {
-        const studentDoc = await getDoc(doc(db, 'students', data.text));
-        if (studentDoc.exists()) {
-          setSelectedStudent({ id: studentDoc.id, ...studentDoc.data() } as Student);
-          setView('details');
-        } else {
-          alert("Invalid QR Code");
-        }
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, `students/${data.text}`);
       }
     }
   };
@@ -554,11 +479,8 @@ export default function App() {
               </div>
 
               <div className="grid gap-4">
-                <Button onClick={() => setView('admission')} className="h-20 text-xl">
+                <Button onClick={() => setView('admission')} className="h-20 text-xl w-full">
                   <User className="w-6 h-6" /> Student Admission
-                </Button>
-                <Button onClick={() => setView('scan')} variant="ghost" className="h-20 text-xl border border-zinc-800">
-                  <Scan className="w-6 h-6" /> Scan ID Card
                 </Button>
               </div>
             </motion.div>
@@ -580,23 +502,6 @@ export default function App() {
               </div>
 
               <form onSubmit={submitAdmission} className="space-y-6">
-                <div className="flex flex-col items-center gap-4 py-4">
-                  <div className="relative w-32 h-32 bg-zinc-900 rounded-2xl border-2 border-dashed border-zinc-700 flex items-center justify-center overflow-hidden">
-                    {photoPreview ? (
-                      <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <Camera className="w-10 h-10 text-zinc-600" />
-                    )}
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handlePhotoChange}
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
-                  </div>
-                  <p className="text-xs font-bold text-zinc-500 uppercase">Upload Student Photo</p>
-                </div>
-
                 <Input label="Full Name" icon={User} placeholder="Enter student name" value={formData.fullName} onChange={(e: any) => setFormData({...formData, fullName: e.target.value})} required />
                 <Input label="Father's Name" icon={User} placeholder="Enter father's name" value={formData.fatherName} onChange={(e: any) => setFormData({...formData, fatherName: e.target.value})} />
                 <Input label="Mother's Name" icon={User} placeholder="Enter mother's name" value={formData.motherName} onChange={(e: any) => setFormData({...formData, motherName: e.target.value})} />
@@ -698,16 +603,6 @@ export default function App() {
                           )}>
                             {student.paymentStatus}
                           </div>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              downloadPhoto(student);
-                            }}
-                            className="p-2 bg-zinc-800 rounded-lg text-yellow-400 hover:bg-zinc-700"
-                            title="Download Photo"
-                          >
-                            <Camera className="w-4 h-4" />
-                          </button>
                         </div>
                       </motion.div>
                     ))}
@@ -785,17 +680,8 @@ export default function App() {
                           <div className="w-40 h-40 border-[10px] border-[#002060] rounded-full flex items-center justify-center text-[#002060] font-black text-2xl">ALPHA</div>
                         </div>
 
-                        {/* Photo */}
-                        <div className="w-24 h-28 bg-zinc-100 border border-zinc-200 overflow-hidden mt-2">
-                          {selectedStudent.photoUrl ? (
-                            <img src={selectedStudent.photoUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-zinc-300"><User className="w-12 h-12" /></div>
-                          )}
-                        </div>
-
                         {/* Details */}
-                        <div className="flex-1 ml-4 space-y-1.5 pt-2">
+                        <div className="flex-1 space-y-1.5 pt-2">
                           <div className="flex text-[10px]">
                             <span className="w-20 font-bold text-zinc-600">Name</span>
                             <span className="font-black">: {selectedStudent.fullName}</span>
@@ -945,18 +831,15 @@ export default function App() {
               </div>
 
               {/* Actions */}
-              <div className="grid grid-cols-2 gap-4">
-                <Button onClick={downloadIDCard} variant="secondary" className="w-full">
-                  <Download className="w-5 h-5" /> ID Card
+              <div className="grid grid-cols-1 gap-4">
+                <Button onClick={downloadIDCard} className="w-full h-14">
+                  <Download className="w-5 h-5" /> Download ID Card
                 </Button>
-                <Button onClick={downloadPhoto} variant="secondary" className="w-full">
-                  <Camera className="w-5 h-5" /> Photo
-                </Button>
-                <Button onClick={shareIDCard} variant="secondary" className="w-full col-span-2">
+                <Button onClick={shareIDCard} variant="secondary" className="w-full h-14">
                   <Share2 className="w-5 h-5" /> Share on WhatsApp
                 </Button>
                 {user?.email === 'santoshsantoshsingh597@gmail.com' && (
-                  <Button onClick={() => togglePayment(selectedStudent)} className="col-span-2 bg-zinc-900 text-yellow-400 border border-zinc-800">
+                  <Button onClick={() => togglePayment(selectedStudent)} className="w-full h-14 bg-zinc-900 text-yellow-400 border border-zinc-800">
                     <CreditCard className="w-5 h-5" /> 
                     Mark as {selectedStudent.paymentStatus === 'FULL PAID' ? 'PENDING' : 'FULL PAID'}
                   </Button>
@@ -994,58 +877,16 @@ export default function App() {
               </div>
             </motion.div>
           )}
-
-          {view === 'scan' && (
-            <motion.div 
-              key="scan"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-6"
-            >
-              <div className="flex items-center gap-4">
-                <button onClick={() => setView('home')} className="p-2 bg-zinc-900 rounded-lg hover:bg-zinc-800">
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-                <h2 className="text-2xl font-black">Scan ID Card</h2>
-              </div>
-
-              <div className="aspect-square bg-zinc-900 rounded-3xl overflow-hidden border-2 border-yellow-400 relative">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-64 h-64 border-2 border-yellow-400/50 rounded-2xl animate-pulse" />
-                </div>
-                {/* In a real environment, we'd use a camera library here */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center space-y-4">
-                  <QrCode className="w-16 h-16 text-yellow-400" />
-                  <p className="text-sm font-bold text-zinc-400">Align the QR code on the student ID card within the frame to scan.</p>
-                  <p className="text-[10px] text-zinc-600 uppercase font-black">Scanning Active...</p>
-                </div>
-                {/* Mocking the scanner behavior for demo purposes if no camera is available */}
-                <div className="absolute bottom-8 left-0 right-0 px-8">
-                  <Input 
-                    label="Or Enter Student ID Manually" 
-                    placeholder="Paste ID here" 
-                    onKeyDown={(e: any) => {
-                      if (e.key === 'Enter') handleScan({ text: e.target.value });
-                    }}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          )}
         </AnimatePresence>
       </main>
 
       {/* Bottom Navigation (Mobile Style) */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-zinc-800 px-8 py-4 flex justify-between items-center z-50">
+      <nav className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-zinc-800 px-8 py-4 flex justify-around items-center z-50">
         <button onClick={() => setView('home')} className={cn("p-2 rounded-xl transition-all", view === 'home' ? "text-yellow-400" : "text-zinc-500")}>
           <LayoutDashboard className="w-6 h-6" />
         </button>
         <button onClick={() => setView('admission')} className={cn("p-2 rounded-xl transition-all", view === 'admission' ? "text-yellow-400" : "text-zinc-500")}>
           <User className="w-6 h-6" />
-        </button>
-        <button onClick={() => setView('scan')} className={cn("p-2 rounded-xl transition-all", view === 'scan' ? "text-yellow-400" : "text-zinc-500")}>
-          <Scan className="w-6 h-6" />
         </button>
         <button onClick={() => setView('admin')} className={cn("p-2 rounded-xl transition-all", view === 'admin' ? "text-yellow-400" : "text-zinc-500")}>
           <Edit className="w-6 h-6" />

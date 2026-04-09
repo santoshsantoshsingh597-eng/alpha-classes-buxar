@@ -1,5 +1,5 @@
 {
   "name": "ALPHA CLASSES BUXAR",
   "description": "Coaching institute admission system with student registration, admin panel, and ID card generation.",
-  "requestFramePermissions": ["camera"]
+  "requestFramePermissions": []
 }
